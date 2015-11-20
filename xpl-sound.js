@@ -67,13 +67,15 @@ commander.command('*').description("Start waiting sound commands").action(
 function playSound(soundPlayer, xpl, url) {
   debug("Play sound ", url);
   var sound = soundPlayer.newSound(url);
-  sound.once('playing', function onPlaying() {
+
+  function onPlaying() {
     xpl.sendXplTrig({
       uuid : sound.uuid,
       url : sound.url,
       command : 'playing'
     }, "audio.basic");
-  });
+  }
+  sound.once('playing', onPlaying);
   sound.on('progress', function onProgress(progress) {
     var d = {
       uuid : sound.uuid,
