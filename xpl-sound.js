@@ -90,7 +90,7 @@ function playSound(soundPlayer, xpl, url) {
     sound.removeListener('playing', onPlaying);
     sound.removeListener('progress', onProgress);
     sound.removeListener('error', onError);
-    xpl.removeListener('xpl:xpl-cmnd', onStop);
+    xpl.removeListener('xpl:xpl-cmnd', onXplStop);
 
     xpl.sendXplTrig({
       uuid : sound.uuid,
@@ -102,7 +102,7 @@ function playSound(soundPlayer, xpl, url) {
     sound.removeListener('playing', onPlaying);
     sound.removeListener('progress', onProgress);
     sound.removeListener('stopped', onStopped);
-    xpl.removeListener('xpl:xpl-cmnd', onStop);
+    xpl.removeListener('xpl:xpl-cmnd', onXplStop);
 
     xpl.sendXplTrig({
       uuid : sound.uuid,
@@ -110,11 +110,7 @@ function playSound(soundPlayer, xpl, url) {
       command : 'error'
     }, "audio.basic");
   }
-  sound.once('playing', onPlaying);
-  sound.on('progress', onProgress);
-  sound.once('stopped', onStopped);
-  sound.once('error', onStopped);
-  xpl.on("xpl:xpl-cmnd", function onStop(message) {
+  function onXplStop(message) {
     if (message.bodyName !== "audio.basic" || message.body.command !== 'stop') {
       return;
     }
@@ -124,7 +120,12 @@ function playSound(soundPlayer, xpl, url) {
     }
 
     sound.stop();
-  });
+  }
+  sound.once('playing', onPlaying);
+  sound.on('progress', onProgress);
+  sound.once('stopped', onStopped);
+  sound.once('error', onStopped);
+  xpl.on("xpl:xpl-cmnd", onXplStop);
 
   sound.play();
 }
