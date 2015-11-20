@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "XPL sound",
   "bin": {
-  	"xpl-delabarre": "./bin/xpl-sound"
+  	"xpl-sound": "./bin/xpl-sound"
   },
   "dependencies": {
 	  "xpl-api": ">=1.0.12",
