@@ -56,7 +56,7 @@ commander.command('*').description("Start waiting sound commands").action(
               return;
             }
 
-            playSound(xpl, url);
+            playSound(soundPlayer, xpl, url);
 
             return;
           }
@@ -64,7 +64,7 @@ commander.command('*').description("Start waiting sound commands").action(
       });
     });
 
-function playSound(xpl, url) {
+function playSound(soundPlayer, xpl, url) {
   debug("Play sound ", url);
   var sound = soundPlayer.newSound(url);
   sound.once('playing', function onPlaying() {
