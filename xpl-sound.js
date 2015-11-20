@@ -7,6 +7,8 @@ var debug = require('debug')('xpl-sound');
 commander.version(require("./package.json").version);
 
 commander.option("--heapDump", "Enable heap dump (require heapdump)");
+commander.option("--minimumDelayBetweenProgress",
+    "Minimum delay between two progress events (seconds)", parseFloat);
 
 Xpl.fillCommander(commander);
 
@@ -115,7 +117,7 @@ function playSound(soundPlayer, xpl, url) {
       return;
     }
 
-    if (message.body.uuid !== sound.uuid) {
+    if (message.body.uuid !== sound.uuid && message.body.url !== sound.url) {
       return;
     }
 
