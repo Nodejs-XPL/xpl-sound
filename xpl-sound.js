@@ -98,7 +98,7 @@ function playSound(soundPlayer, xpl, url) {
       command : 'stop'
     }, "audio.basic");
   }
-  function onStopped() {
+  function onError() {
     sound.removeListener('playing', onPlaying);
     sound.removeListener('progress', onProgress);
     sound.removeListener('stopped', onStopped);
@@ -124,7 +124,7 @@ function playSound(soundPlayer, xpl, url) {
   sound.once('playing', onPlaying);
   sound.on('progress', onProgress);
   sound.once('stopped', onStopped);
-  sound.once('error', onStopped);
+  sound.once('error', onError);
   xpl.on("xpl:xpl-cmnd", onXplStop);
 
   sound.play();
