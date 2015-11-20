@@ -26,7 +26,7 @@ commander.command('*').description("Start waiting sound commands").action(
       var xpl = new Xpl(commander);
 
       xpl.on("error", function(error) {
-        console.log("XPL error", error);
+        console.error("XPL error", error);
       });
 
       xpl.bind(function(error) {
