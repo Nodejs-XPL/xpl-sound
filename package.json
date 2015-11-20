@@ -1,0 +1,24 @@
+{
+  "name": "xpl-sound",
+  "version": "1.0.0",
+  "description": "XPL sound",
+  "bin": {
+  	"xpl-delabarre": "./bin/xpl-sound"
+  },
+  "dependencies": {
+	  "xpl-api": ">=1.0.12",
+	  "commander": "~2.3",	 
+	  "soundplayer": "latest"	
+  },
+  "keywords": [
+    "XPL"
+  ],
+  "files": [
+    "xpl-sound.js",
+    "bin/xpl-sound"
+	],
+  "repository": { "type": "git", "url": "https://github.com/oeuillot/xpl-sound.git" },
+  "author": "Olivier Oeuillot",
+  "license": "GPL",
+  "readmeFilename": "README.md"
+}
