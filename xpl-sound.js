@@ -70,16 +70,16 @@ function playSound(soundPlayer, xpl, url) {
 
   function onPlaying() {
     xpl.sendXplTrig({
-      uuid : sound.uuid,
       url : sound.url,
-      command : 'playing'
+      command : 'playing',
+      uuid : sound.uuid
     }, "audio.basic");
   }
   function onProgress(progress) {
     var d = {
-      uuid : sound.uuid,
       url : sound.url,
-      command : 'progress'
+      command : 'progress',
+      uuid : sound.uuid
     };
     for ( var i in progress) {
       d[i] = progress[i];
@@ -105,9 +105,9 @@ function playSound(soundPlayer, xpl, url) {
     xpl.removeListener('xpl:xpl-cmnd', onXplStop);
 
     xpl.sendXplTrig({
-      uuid : sound.uuid,
       url : sound.url,
-      command : 'error'
+      command : 'error',
+      uuid : sound.uuid
     }, "audio.basic");
   }
   function onXplStop(message) {
