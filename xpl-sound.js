@@ -2,6 +2,7 @@ var Xpl = require("xpl-api");
 var commander = require('commander');
 var SoundPlayer = require('soundplayer');
 var os = require('os');
+var debug = require('debug')('xpl-sound');
 
 commander.version(require("./package.json").version);
 

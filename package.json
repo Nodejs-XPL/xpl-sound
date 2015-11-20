@@ -8,7 +8,8 @@
   "dependencies": {
 	  "xpl-api": ">=1.0.12",
 	  "commander": "~2.3",	 
-	  "soundplayer": "latest"	
+	  "soundplayer": "latest",
+	  "debug": "latest"
   },
   "keywords": [
     "XPL"
