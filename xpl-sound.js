@@ -75,8 +75,7 @@ function playSound(soundPlayer, xpl, url) {
       command : 'playing'
     }, "audio.basic");
   }
-  sound.once('playing', onPlaying);
-  sound.on('progress', function onProgress(progress) {
+  function onProgress(progress) {
     var d = {
       uuid : sound.uuid,
       url : sound.url,
@@ -86,8 +85,8 @@ function playSound(soundPlayer, xpl, url) {
       d[i] = progress[i];
     }
     xpl.sendXplTrig(d, "audio.basic");
-  });
-  sound.once('stopped', function onStopped() {
+  }
+  function onStopped() {
     sound.removeListener('playing', onPlaying);
     sound.removeListener('progress', onProgress);
     sound.removeListener('error', onError);
@@ -98,8 +97,8 @@ function playSound(soundPlayer, xpl, url) {
       url : sound.url,
       command : 'stop'
     }, "audio.basic");
-  });
-  sound.once('error', function onStopped() {
+  }
+  function onStopped() {
     sound.removeListener('playing', onPlaying);
     sound.removeListener('progress', onProgress);
     sound.removeListener('stopped', onStopped);
@@ -110,7 +109,11 @@ function playSound(soundPlayer, xpl, url) {
       url : sound.url,
       command : 'error'
     }, "audio.basic");
-  });
+  }
+  sound.once('playing', onPlaying);
+  sound.on('progress', onProgress);
+  sound.once('stopped', onStopped);
+  sound.once('error', onStopped);
   xpl.on("xpl:xpl-cmnd", function onStop(message) {
     if (message.bodyName !== "audio.basic" || message.body.command !== 'stop') {
       return;
