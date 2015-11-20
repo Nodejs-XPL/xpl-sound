@@ -42,6 +42,7 @@ commander.command('*').description("Start waiting sound commands").action(
         var soundPlayer = new SoundPlayer(commander);
 
         xpl.on("xpl:xpl-cmnd", function(message) {
+          debug("XplMessage", message);
           if (message.bodyName !== "audio.basic") {
             return;
           }
