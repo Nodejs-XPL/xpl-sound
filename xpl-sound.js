@@ -2,13 +2,17 @@ var Xpl = require("xpl-api");
 var commander = require('commander');
 var SoundPlayer = require('soundplayer');
 var os = require('os');
+var loudness = require('loudness');
 var debug = require('debug')('xpl-sound');
+var Semaphore = require('semaphore');
 
 commander.version(require("./package.json").version);
 
 commander.option("--heapDump", "Enable heap dump (require heapdump)");
 commander.option("--minimumDelayBetweenProgress",
     "Minimum delay between two progress events (seconds)", parseFloat);
+commander.option("--volumeStateDelay", "Volume and mute state interval",
+    parseInt);
 
 Xpl.fillCommander(commander);
 
@@ -41,6 +45,15 @@ commander.command('*').description("Start waiting sound commands").action(
         console.log("Xpl bind succeed ");
         // xpl.sendXplTrig(body, callback);
 
+        var timer = 5;
+        if (commander.volumeStateDelay !== undefined) {
+          timer = commander.volumeStateDelay;
+        }
+
+        if (timer > 0) {
+          setInterval(updateLoudnessChanges.bind(this, xpl), 1000 * timer);
+        }
+
         var soundPlayer = new SoundPlayer(commander);
 
         xpl.on("xpl:xpl-cmnd", function(message) {
@@ -51,7 +64,8 @@ commander.command('*').description("Start waiting sound commands").action(
 
           var body = message.body;
 
-          if (body.command === "play") {
+          switch (body.command) {
+          case "play":
             var url = body.url;
             if (!url) {
               console.error("No specified url", body);
@@ -59,12 +73,132 @@ commander.command('*').description("Start waiting sound commands").action(
             }
 
             playSound(soundPlayer, xpl, url);
+            return;
 
+          case "volume+":
+            changeVolume(xpl, 1);
+            return;
+
+          case "volume-":
+            changeVolume(xpl, -1);
+            return;
+
+          case "mute":
+            changeMute(xpl, true);
+            return;
+
+          case "unmute":
+            changeMute(xpl, false);
             return;
           }
         });
       });
     });
+
+var updateLock = Semaphore(1);
+
+function changeMute(xpl, mute) {
+  debug("Change mute to ", mute);
+
+  updateLock.take(function() {
+    loudness.setMuted(function(error, volume) {
+      updateLock.leave();
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      updateLoudnessChanges(xpl);
+    });
+  });
+}
+
+function changeVolume(xpl, increment) {
+  debug("Change volume to ", increment);
+
+  updateLock.take(function() {
+    loudness.getVolume(function(error, volume) {
+      if (error) {
+        updateLock.leave();
+        console.error(error);
+        return;
+      }
+
+      loudness.setVolume(volumne + increment, function(error) {
+        updateLock.leave();
+
+        if (error) {
+          console.error(error);
+          return;
+        }
+
+        updateLoudnessChanges(xpl);
+      });
+    });
+  });
+}
+
+var lastVolume;
+var lastMuted;
+
+function updateLoudnessChanges(xpl) {
+  debug("Update loundness changes");
+
+  function updateMute() {
+    loudness.getMute(function(error, mute) {
+      debug("getMute() returns", mute, error);
+
+      if (error) {
+        console.error(error);
+        updateLock.leave();
+        return;
+      }
+
+      if (mute === lastMuted) {
+        updateLock.leave();
+        return;
+      }
+      lastMuted = mute;
+
+      xpl.sendXplTrig({
+        command : 'muted',
+        current : !!mute
+
+      }, "audio.basic", function(error) {
+        if (error) {
+          console.error(error);
+        }
+        updateLock.leave();
+      });
+    });
+  }
+
+  updateLock.take(function() {
+    loudness.getVolume(function(error, volume) {
+      debug("getVolume() returns", volume, error);
+      if (error) {
+        console.error(error);
+        return updateMute();
+      }
+
+      if (volume === lastVolume) {
+        return updateMute();
+      }
+      lastVolume = volume;
+
+      xpl.sendXplTrig({
+        command : 'volume',
+        current : volume
+      }, "audio.basic", function(error) {
+        if (error) {
+          console.error(error);
+        }
+
+        updateMute();
+      });
+    });
+  });
+}
 
 function playSound(soundPlayer, xpl, url) {
   debug("Play sound ", url);
@@ -117,7 +251,11 @@ function playSound(soundPlayer, xpl, url) {
       return;
     }
 
-    if (message.body.uuid !== sound.uuid && message.body.url !== sound.url) {
+    if (message.body.uuid && message.body.uuid !== sound.uuid) {
+      return;
+    }
+
+    if (message.body.url && message.body.url !== sound.url) {
       return;
     }
 

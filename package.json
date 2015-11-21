@@ -7,7 +7,9 @@
   },
   "dependencies": {
 	  "xpl-api": ">=1.0.12",
-	  "commander": "~2.3",	 
+	  "commander": "~2.3",
+	  "loudness": "latest",
+	  "semaphore": "latest",
 	  "soundplayer": "latest",
 	  "debug": "latest"
   },
