@@ -145,8 +145,8 @@ function updateLoudnessChanges(xpl) {
   debug("Update loundness changes");
 
   function updateMute() {
-    loudness.getMute(function(error, mute) {
-      debug("getMute() returns", mute, error);
+    loudness.getMuted(function(error, mute) {
+      debug("getMuted() returns", mute, error);
 
       if (error) {
         console.error(error);
