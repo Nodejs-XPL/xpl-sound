@@ -124,7 +124,7 @@ function changeVolume(xpl, increment) {
         return;
       }
 
-      loudness.setVolume(volumne + increment, function(error) {
+      loudness.setVolume(volume + increment, function(error) {
         updateLock.leave();
 
         if (error) {
