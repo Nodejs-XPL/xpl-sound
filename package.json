@@ -1,6 +1,6 @@
 {
   "name": "xpl-sound",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "XPL sound",
   "bin": {
   	"xpl-sound": "./bin/xpl-sound"
@@ -8,10 +8,10 @@
   "dependencies": {
 	  "xpl-api": ">=1.0.12",
 	  "commander": "~2.3",
-	  "loudness": "latest",
-	  "semaphore": "latest",
-	  "soundplayer": "latest",
-	  "debug": "latest"
+	  "loudness": "~0.2",
+	  "semaphore": "~1.0",
+	  "soundplayer": "~1.0",
+	  "debug": "~2.2"
   },
   "keywords": [
     "XPL"
@@ -20,7 +20,7 @@
     "xpl-sound.js",
     "bin/xpl-sound"
 	],
-  "repository": { "type": "git", "url": "https://github.com/oeuillot/xpl-sound.git" },
+  "repository": { "type": "git", "url": "https://github.com/Nodejs-XPL/xpl-sound.git" },
   "author": "Olivier Oeuillot",
   "license": "GPL",
   "readmeFilename": "README.md"
