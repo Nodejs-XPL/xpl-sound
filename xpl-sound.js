@@ -101,7 +101,7 @@ function changeMute(xpl, mute) {
   debug("Change mute to ", mute);
 
   updateLock.take(function() {
-    loudness.setMuted(function(error, volume) {
+    loudness.setMuted(mute, function(error) {
       updateLock.leave();
       if (error) {
         console.error(error);
