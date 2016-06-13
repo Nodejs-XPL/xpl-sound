@@ -1,4 +1,4 @@
-/*jslint node: true, vars: true, nomen: true */
+/*jslint node: true, vars: true, nomen: true, esversion: 6 */
 'use strict';
 
 var Xpl = require("xpl-api");
@@ -19,8 +19,7 @@ commander.option("--volumeStateDelay", "Volume and mute state interval",
 
 Xpl.fillCommander(commander);
 
-commander.command('*').description("Start waiting sound commands").action(
-    function() {
+commander.command('*').description("Start waiting sound commands").action(() => {
       console.log("Start");
 
       if (!commander.xplSource) {
@@ -34,11 +33,11 @@ commander.command('*').description("Start waiting sound commands").action(
 
       var xpl = new Xpl(commander);
 
-      xpl.on("error", function(error) {
+      xpl.on("error", (error) => {
         console.error("XPL error", error);
       });
 
-      xpl.bind(function(error) {
+      xpl.bind((error) => {
         if (error) {
           console.log("Can not open xpl bridge ", error);
           process.exit(2);
@@ -59,7 +58,7 @@ commander.command('*').description("Start waiting sound commands").action(
 
         var soundPlayer = new SoundPlayer(commander);
 
-        xpl.on("xpl:xpl-cmnd", function(message) {
+        xpl.on("xpl:xpl-cmnd", (message) => {
           debug("XplMessage", message);
           if (message.bodyName !== "audio.basic") {
             return;
@@ -75,9 +74,13 @@ commander.command('*').description("Start waiting sound commands").action(
               return;
             }
 
-            playSound(soundPlayer, xpl, url);
+            playSound(soundPlayer, xpl, url, body.uuid, body.inTrackList==="enable");
             return;
 
+          case "stop":
+            soundPlayer.stop();
+            return;
+            
           case "volume+":
             changeVolume(xpl, 1);
             return;
@@ -119,8 +122,8 @@ function changeMute(xpl, mute) {
 function changeVolume(xpl, increment) {
   debug("Change volume to ", increment);
 
-  updateLock.take(function() {
-    loudness.getVolume(function(error, volume) {
+  updateLock.take(() => {
+    loudness.getVolume((error, volume) => {
       if (error) {
         updateLock.leave();
         console.error(error);
@@ -148,7 +151,7 @@ function updateLoudnessChanges(xpl) {
   debug("Update loundness changes");
 
   function updateMute() {
-    loudness.getMuted(function(error, mute) {
+    loudness.getMuted((error, mute) => {
       debug("getMuted() returns", mute, error);
 
       if (error) {
@@ -176,8 +179,8 @@ function updateLoudnessChanges(xpl) {
     });
   }
 
-  updateLock.take(function() {
-    loudness.getVolume(function(error, volume) {
+  updateLock.take(() => {
+    loudness.getVolume((error, volume) => {
       debug("getVolume() returns", volume, error);
       if (error) {
         console.error(error);
@@ -203,9 +206,27 @@ function updateLoudnessChanges(xpl) {
   });
 }
 
-function playSound(soundPlayer, xpl, url) {
-  debug("Play sound ", url);
-  var sound = soundPlayer.newSound(url);
+var trackList=[];
+
+function playSound(soundPlayer, xpl, url, uuid, trackList) {
+  debug("Play sound url=", url);
+  var sound = soundPlayer.newSound(url, uuid);
+  if (trackList) {
+    sound._inTrackList=true;
+    
+    trackList.push(sound);
+    
+    debug("Track list=", trackList);
+    if (trackList.length>1) {
+      return;
+    }
+  }
+  
+  playSound1(soundPlayer, xpl, sound);
+}
+
+  
+function playSound1(soundPlayer, xpl, sound) {
 
   function onPlaying() {
     xpl.sendXplTrig({
@@ -236,6 +257,14 @@ function playSound(soundPlayer, xpl, url) {
       url : sound.url,
       command : 'stop'
     }, "audio.basic");
+    
+    if (sound._inTrackList) {
+      trackList.shift();
+      
+      if (trackList[0]) {
+        playSound1(soundPlayer, xpl, trackList[0]);
+      }
+    }
   }
   function onError() {
     sound.removeListener('playing', onPlaying);
@@ -248,6 +277,14 @@ function playSound(soundPlayer, xpl, url) {
       command : 'error',
       uuid : sound.uuid
     }, "audio.basic");
+    
+    if (sound._inTrackList) {
+      trackList.shift();
+      
+      if (trackList[0]) {
+        playSound1(soundPlayer, xpl, trackList[0]);
+      }
+    }
   }
   function onXplStop(message) {
     if (message.bodyName !== "audio.basic" || message.body.command !== 'stop') {
@@ -262,8 +299,12 @@ function playSound(soundPlayer, xpl, url) {
       return;
     }
 
+    if (sound._inTrackList) {
+      trackList=[];
+    }
     sound.stop();
   }
+  
   sound.once('playing', onPlaying);
   sound.on('progress', onProgress);
   sound.once('stopped', onStopped);
