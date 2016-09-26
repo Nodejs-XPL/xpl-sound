@@ -77,10 +77,6 @@ commander.command('*').description("Start waiting sound commands").action(() => 
             playSound(soundPlayer, xpl, url, body.uuid, body.inTrackList==="enable");
             return;
 
-          case "stop":
-            soundPlayer.stop();
-            return;
-            
           case "volume+":
             changeVolume(xpl, 1);
             return;
