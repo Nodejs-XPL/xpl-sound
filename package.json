@@ -1,21 +1,24 @@
 {
   "name": "xpl-sound",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "XPL sound",
   "bin": {
   	"xpl-sound": "./bin/xpl-sound"
   },
   "dependencies": {
-	  "xpl-api": ">=1.0.12",
+	  "xpl-api": "~2.1",
 	  "commander": "~2.3",
 	  "loudness": "~0.2",
 	  "semaphore": "~1.0",
-	  "soundplayer": "~1.0",
+	  "soundplayer": "~1.1",
 	  "debug": "~2.2"
   },
   "keywords": [
     "XPL"
   ],
+  "engines": {
+    "node": ">=5.0.0"
+  },
   "files": [
     "xpl-sound.js",
     "bin/xpl-sound"
