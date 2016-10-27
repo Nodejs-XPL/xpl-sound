@@ -1,318 +1,334 @@
 /*jslint node: true, vars: true, nomen: true, esversion: 6 */
 'use strict';
 
-var Xpl = require("xpl-api");
-var commander = require('commander');
-var SoundPlayer = require('soundplayer');
-var os = require('os');
-var loudness = require('loudness');
-var debug = require('debug')('xpl-sound');
-var Semaphore = require('semaphore');
+const Xpl = require("xpl-api");
+const commander = require('commander');
+const SoundPlayer = require('soundplayer');
+const os = require('os');
+const loudness = require('loudness');
+const debug = require('debug')('xpl-sound');
+const Semaphore = require('semaphore');
+
+const DEFAULT_DEVICE_NAME = "soundplayer";
 
 commander.version(require("./package.json").version);
 
 commander.option("--heapDump", "Enable heap dump (require heapdump)");
-commander.option("--minimumDelayBetweenProgress",
-    "Minimum delay between two progress events (seconds)", parseFloat);
-commander.option("--volumeStateDelay", "Volume and mute state interval",
-    parseInt);
+commander.option("--minimumDelayBetweenProgress", "Minimum delay between two progress events (seconds)", parseFloat);
+commander.option("--volumeStateDelay", "Volume and mute state interval", parseInt);
+commander.option("--deviceName", "Device name");
 
 Xpl.fillCommander(commander);
 
 commander.command('*').description("Start waiting sound commands").action(() => {
-      console.log("Start");
+	console.log("Start");
 
-      if (!commander.xplSource) {
-        var hostName = os.hostname();
-        if (hostName.indexOf('.') > 0) {
-          hostName = hostName.substring(0, hostName.indexOf('.'));
-        }
+	let hostName = os.hostname();
+	if (hostName.indexOf('.') > 0) {
+		hostName = hostName.substring(0, hostName.indexOf('.'));
+	}
 
-        commander.xplSource = "soundplayer." + hostName;
-      }
+	let deviceName = commander.deviceName;
+	if (!deviceName) {
+		deviceName = DEFAULT_DEVICE_NAME + "-" + hostName;
+	}
 
-      var xpl = new Xpl(commander);
+	if (!commander.xplSource) {
+		commander.xplSource = "soundplayer." + hostName;
+	}
 
-      xpl.on("error", (error) => {
-        console.error("XPL error", error);
-      });
+	var xpl = new Xpl(commander);
 
-      xpl.bind((error) => {
-        if (error) {
-          console.log("Can not open xpl bridge ", error);
-          process.exit(2);
-          return;
-        }
+	xpl.on("error", (error) => {
+		console.error("XPL error", error);
+	});
 
-        console.log("Xpl bind succeed ");
-        // xpl.sendXplTrig(body, callback);
+	xpl.bind((error) => {
+		if (error) {
+			console.log("Can not open xpl bridge ", error);
+			process.exit(2);
+			return;
+		}
 
-        var timer = 5;
-        if (commander.volumeStateDelay !== undefined) {
-          timer = commander.volumeStateDelay;
-        }
+		console.log("Xpl bind succeed ");
+		// xpl.sendXplTrig(body, callback);
 
-        if (timer > 0) {
-          setInterval(updateLoudnessChanges.bind(this, xpl), 1000 * timer);
-        }
+		var timer = 5;
+		if (commander.volumeStateDelay !== undefined) {
+			timer = commander.volumeStateDelay;
+		}
 
-        var soundPlayer = new SoundPlayer(commander);
+		if (timer > 0) {
+			setInterval(updateLoudnessChanges.bind(this, xpl, deviceName), 1000 * timer);
+		}
 
-        xpl.on("xpl:xpl-cmnd", (message) => {
-          debug("XplMessage", message);
-          if (message.bodyName !== "audio.basic") {
-            return;
-          }
+		var soundPlayer = new SoundPlayer(commander);
 
-          var body = message.body;
+		xpl.on("xpl:xpl-cmnd", (message) => {
+			debug("XplMessage", message);
+			if (message.bodyName !== "audio.basic") {
+				return;
+			}
 
-          switch (body.command) {
-          case "play":
-            var url = body.url;
-            if (!url) {
-              console.error("No specified url", body);
-              return;
-            }
+			var body = message.body;
 
-            playSound(soundPlayer, xpl, url, body.uuid, body.inTrackList==="enable");
-            return;
+			switch (body.command) {
+				case "play":
+					var url = body.url;
+					if (!url) {
+						console.error("No specified url", body);
+						return;
+					}
 
-          case "volume+":
-            changeVolume(xpl, 1);
-            return;
+					playSound(soundPlayer, xpl, url, body.uuid, body.inTrackList === "enable", deviceName);
+					return;
 
-          case "volume-":
-            changeVolume(xpl, -1);
-            return;
+				case "volume+":
+					changeVolume(xpl, 1, deviceName);
+					return;
 
-          case "mute":
-            changeMute(xpl, true);
-            return;
+				case "volume-":
+					changeVolume(xpl, -1, deviceName);
+					return;
 
-          case "unmute":
-            changeMute(xpl, false);
-            return;
-          }
-        });
-      });
-    });
+				case "mute":
+					changeMute(xpl, true, deviceName);
+					return;
+
+				case "unmute":
+					changeMute(xpl, false, deviceName);
+					return;
+			}
+		});
+	});
+});
 
 var updateLock = Semaphore(1);
 
-function changeMute(xpl, mute) {
-  debug("Change mute to ", mute);
+function changeMute(xpl, mute, deviceName) {
+	debug("Change mute to ", mute);
 
-  updateLock.take(function() {
-    loudness.setMuted(mute, function(error) {
-      updateLock.leave();
-      if (error) {
-        console.error(error);
-        return;
-      }
+	updateLock.take(function () {
+		loudness.setMuted(mute, function (error) {
+			updateLock.leave();
+			if (error) {
+				console.error(error);
+				return;
+			}
 
-      updateLoudnessChanges(xpl);
-    });
-  });
+			updateLoudnessChanges(xpl, deviceName);
+		});
+	});
 }
 
-function changeVolume(xpl, increment) {
-  debug("Change volume to ", increment);
+function changeVolume(xpl, increment, deviceName) {
+	debug("Change volume to ", increment);
 
-  updateLock.take(() => {
-    loudness.getVolume((error, volume) => {
-      if (error) {
-        updateLock.leave();
-        console.error(error);
-        return;
-      }
+	updateLock.take(() => {
+		loudness.getVolume((error, volume) => {
+			if (error) {
+				updateLock.leave();
+				console.error(error);
+				return;
+			}
 
-      loudness.setVolume(volume + increment, function(error) {
-        updateLock.leave();
+			loudness.setVolume(volume + increment, function (error) {
+				updateLock.leave();
 
-        if (error) {
-          console.error(error);
-          return;
-        }
+				if (error) {
+					console.error(error);
+					return;
+				}
 
-        updateLoudnessChanges(xpl);
-      });
-    });
-  });
+				updateLoudnessChanges(xpl, deviceName);
+			});
+		});
+	});
 }
 
 var lastVolume;
 var lastMuted;
 
-function updateLoudnessChanges(xpl) {
-  debug("Update loundness changes");
+function updateLoudnessChanges(xpl, deviceName) {
+	debug("updateLoudnessChanges", "Start update");
 
-  function updateMute() {
-    loudness.getMuted((error, mute) => {
-      debug("getMuted() returns", mute, error);
+	function updateMute() {
+		loudness.getMuted((error, mute) => {
+			debug("getMuted() returns", mute, error);
 
-      if (error) {
-        console.error(error);
-        updateLock.leave();
-        return;
-      }
+			if (error) {
+				console.error(error);
+				updateLock.leave();
+				return;
+			}
 
-      if (mute === lastMuted) {
-        updateLock.leave();
-        return;
-      }
-      lastMuted = mute;
+			if (mute === lastMuted) {
+				updateLock.leave();
+				return;
+			}
+			lastMuted = mute;
 
-      xpl.sendXplTrig({
-        command : 'muted',
-        current : !!mute
+			xpl.sendXplTrig({
+				device: deviceName,
+				type: 'muted',
+				command: !!mute
 
-      }, "audio.basic", function(error) {
-        if (error) {
-          console.error(error);
-        }
-        updateLock.leave();
-      });
-    });
-  }
+			}, "audio.basic", function (error) {
+				if (error) {
+					console.error(error);
+				}
+				updateLock.leave();
+			});
+		});
+	}
 
-  updateLock.take(() => {
-    loudness.getVolume((error, volume) => {
-      debug("getVolume() returns", volume, error);
-      if (error) {
-        console.error(error);
-        return updateMute();
-      }
+	updateLock.take(() => {
+		loudness.getVolume((error, volume) => {
+			debug("getVolume() returns", volume, error);
+			if (error) {
+				console.error(error);
+				return updateMute();
+			}
 
-      if (volume === lastVolume) {
-        return updateMute();
-      }
-      lastVolume = volume;
+			if (volume === lastVolume) {
+				return updateMute();
+			}
+			lastVolume = volume;
 
-      xpl.sendXplTrig({
-        command : 'volume',
-        current : volume
-      }, "audio.basic", function(error) {
-        if (error) {
-          console.error(error);
-        }
+			xpl.sendXplTrig({
+				device: deviceName,
+				type: 'volume',
+				command: volume
+			}, "audio.basic", function (error) {
+				if (error) {
+					console.error(error);
+				}
 
-        updateMute();
-      });
-    });
-  });
+				updateMute();
+			});
+		});
+	});
 }
 
-var trackList=[];
+var trackList = [];
 
-function playSound(soundPlayer, xpl, url, uuid, trackList) {
-  debug("Play sound url=", url);
-  var sound = soundPlayer.newSound(url, uuid);
-  if (trackList) {
-    sound._inTrackList=true;
-    
-    trackList.push(sound);
-    
-    debug("Track list=", trackList);
-    if (trackList.length>1) {
-      return;
-    }
-  }
-  
-  playSound1(soundPlayer, xpl, sound);
+function playSound(soundPlayer, xpl, url, uuid, trackList, deviceName) {
+	debug("playSound", "Play sound url=", url);
+	var sound = soundPlayer.newSound(url, uuid);
+	if (trackList) {
+		sound._inTrackList = true;
+
+		trackList.push(sound);
+
+		debug("Track list=", trackList);
+		if (trackList.length > 1) {
+			return;
+		}
+	}
+
+	playSound1(soundPlayer, xpl, sound, deviceName);
 }
 
-  
-function playSound1(soundPlayer, xpl, sound) {
 
-  function onPlaying() {
-    xpl.sendXplTrig({
-      url : sound.url,
-      command : 'playing',
-      uuid : sound.uuid
-    }, "audio.basic");
-  }
-  function onProgress(progress) {
-    var d = {
-      url : sound.url,
-      command : 'progress',
-      uuid : sound.uuid
-    };
-    for ( var i in progress) {
-      d[i] = progress[i];
-    }
-    xpl.sendXplTrig(d, "audio.basic");
-  }
-  function onStopped() {
-    sound.removeListener('playing', onPlaying);
-    sound.removeListener('progress', onProgress);
-    sound.removeListener('error', onError);
-    xpl.removeListener('xpl:xpl-cmnd', onXplStop);
+function playSound1(soundPlayer, xpl, sound, deviceName) {
 
-    xpl.sendXplTrig({
-      uuid : sound.uuid,
-      url : sound.url,
-      command : 'stop'
-    }, "audio.basic");
-    
-    if (sound._inTrackList) {
-      trackList.shift();
-      
-      if (trackList[0]) {
-        playSound1(soundPlayer, xpl, trackList[0]);
-      }
-    }
-  }
-  function onError() {
-    sound.removeListener('playing', onPlaying);
-    sound.removeListener('progress', onProgress);
-    sound.removeListener('stopped', onStopped);
-    xpl.removeListener('xpl:xpl-cmnd', onXplStop);
+	function onPlaying() {
+		xpl.sendXplTrig({
+			device: deviceName,
+			url: sound.url,
+			command: 'playing',
+			uuid: sound.uuid
+		}, "audio.basic");
+	}
 
-    xpl.sendXplTrig({
-      url : sound.url,
-      command : 'error',
-      uuid : sound.uuid
-    }, "audio.basic");
-    
-    if (sound._inTrackList) {
-      trackList.shift();
-      
-      if (trackList[0]) {
-        playSound1(soundPlayer, xpl, trackList[0]);
-      }
-    }
-  }
-  function onXplStop(message) {
-    if (message.bodyName !== "audio.basic" || message.body.command !== 'stop') {
-      return;
-    }
+	function onProgress(progress) {
+		var d = {
+			device: deviceName,
+			url: sound.url,
+			command: 'progress',
+			uuid: sound.uuid
+		};
+		for (var i in progress) {
+			d[i] = progress[i];
+		}
+		xpl.sendXplTrig(d, "audio.basic");
+	}
 
-    if (message.body.uuid && message.body.uuid !== sound.uuid) {
-      return;
-    }
+	function onStopped() {
+		sound.removeListener('playing', onPlaying);
+		sound.removeListener('progress', onProgress);
+		sound.removeListener('error', onError);
+		xpl.removeListener('xpl:xpl-cmnd', onXplStop);
 
-    if (message.body.url && message.body.url !== sound.url) {
-      return;
-    }
+		xpl.sendXplTrig({
+			device: deviceName,
+			uuid: sound.uuid,
+			url: sound.url,
+			command: 'stop'
+		}, "audio.basic");
 
-    if (sound._inTrackList) {
-      trackList=[];
-    }
-    sound.stop();
-  }
-  
-  sound.once('playing', onPlaying);
-  sound.on('progress', onProgress);
-  sound.once('stopped', onStopped);
-  sound.once('error', onError);
-  xpl.on("xpl:xpl-cmnd", onXplStop);
+		if (sound._inTrackList) {
+			trackList.shift();
 
-  sound.play();
+			if (trackList[0]) {
+				playSound1(soundPlayer, xpl, trackList[0]);
+			}
+		}
+	}
+
+	function onError() {
+		sound.removeListener('playing', onPlaying);
+		sound.removeListener('progress', onProgress);
+		sound.removeListener('stopped', onStopped);
+		xpl.removeListener('xpl:xpl-cmnd', onXplStop);
+
+		xpl.sendXplTrig({
+			device: deviveName,
+			url: sound.url,
+			command: 'error',
+			uuid: sound.uuid
+		}, "audio.basic");
+
+		if (sound._inTrackList) {
+			trackList.shift();
+
+			if (trackList[0]) {
+				playSound1(soundPlayer, xpl, trackList[0]);
+			}
+		}
+	}
+
+	function onXplStop(message) {
+		if (message.bodyName !== "audio.basic" || message.body.command !== 'stop') {
+			return;
+		}
+
+		if (message.body.uuid && message.body.uuid !== sound.uuid) {
+			return;
+		}
+
+		if (message.body.url && message.body.url !== sound.url) {
+			return;
+		}
+
+		if (sound._inTrackList) {
+			trackList = [];
+		}
+		sound.stop();
+	}
+
+	sound.once('playing', onPlaying);
+	sound.on('progress', onProgress);
+	sound.once('stopped', onStopped);
+	sound.once('error', onError);
+	xpl.on("xpl:xpl-cmnd", onXplStop);
+
+	sound.play();
 }
 
 commander.parse(process.argv);
 
 if (commander.headDump) {
-  var heapdump = require("heapdump");
-  console.log("***** HEAPDUMP enabled **************");
+	var heapdump = require("heapdump");
+	console.log("***** HEAPDUMP enabled **************");
 }
