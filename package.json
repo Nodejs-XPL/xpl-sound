@@ -11,7 +11,7 @@
 	  "loudness": "~0.2",
 	  "semaphore": "~1.0",
 	  "soundplayer": "~1.1",
-	  "debug": "~2.2"
+	  "debug": "~4.1"
   },
   "keywords": [
     "XPL"
