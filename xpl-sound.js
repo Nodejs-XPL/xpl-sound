@@ -71,7 +71,7 @@ commander.command('*').description("Start waiting sound commands").action(() => 
 			setInterval(updateLoudnessChanges.bind(this, xpl, deviceName), 1000 * timer);
 		}
 
-		let ttsClient
+		let ttsClient;
 		try {
 			ttsClient = new textToSpeech.TextToSpeechClient();
 		} catch (x) {
