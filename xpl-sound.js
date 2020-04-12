@@ -10,6 +10,9 @@ const Path = require('path');
 const loudness = require('loudness');
 const debug = require('debug')('xpl-sound');
 const Semaphore = require('semaphore');
+const textToSpeech = require('@google-cloud/text-to-speech');
+const tmp = require('tmp');
+const crypto = require('crypto');
 
 const DEFAULT_DEVICE_NAME = "soundplayer";
 
@@ -20,6 +23,7 @@ commander.option("--minimumDelayBetweenProgress", "Minimum delay between two pro
 commander.option("--volumeStateDelay", "Volume and mute state interval", parseInt);
 commander.option("--deviceName <name>", "Device name");
 commander.option("--soundsRepository <directory>", "Sounds repository");
+commander.option("--ttsCacheDir <directory>", "TTS cache directory");
 
 Xpl.fillCommander(commander);
 
@@ -67,15 +71,42 @@ commander.command('*').description("Start waiting sound commands").action(() => 
 			setInterval(updateLoudnessChanges.bind(this, xpl, deviceName), 1000 * timer);
 		}
 
+		let ttsClient
+		try {
+			ttsClient = new textToSpeech.TextToSpeechClient();
+		} catch (x) {
+			console.error(x);
+		}
+
 		var soundPlayer = new SoundPlayer(commander);
 
 		xpl.on("xpl:xpl-cmnd", (message) => {
 			debug("XplMessage", message);
+
+			const body = message.body;
+
+
+			if (message.bodyName === 'audio.tts' && ttsClient) {
+				switch (body.command) {
+					case "speech":
+						let text = body.message;
+						if (!text) {
+							console.error("No specified text", body);
+							return;
+						}
+						let languageCode = body.languageCode || 'fr-FR';
+						let ssmlGender = body.ssmlGender || 'NEUTRAL';
+						playTTS(ttsClient, soundPlayer, xpl, text.trim(), languageCode, ssmlGender, body.uuid, deviceName);
+						return;
+				}
+				return;
+			}
+
 			if (message.bodyName !== "audio.basic") {
 				return;
 			}
 
-			var body = message.body;
+//			console.log('Process message=', body);
 
 			switch (body.command) {
 				case "play":
@@ -84,14 +115,17 @@ commander.command('*').description("Start waiting sound commands").action(() => 
 						console.error("No specified url", body);
 						return;
 					}
-					if (url.indexOf('/') < 0 && commander.soundsRepository) {
-						const p = Path.join(commander.soundsRepository, url);
+					let path = url;
+					const reg = /^#(.*)$/.exec(url);
+					if (reg && commander.soundsRepository) {
+						const p = Path.join(commander.soundsRepository, reg[1] + '.mp3');
+//						console.log('Path=', p);
 						if (fs.existsSync(p)) {
-							url = Path.resolve(p);
+							path = Path.resolve(p);
 						}
 					}
-
-					playSound(soundPlayer, xpl, url, body.uuid, (body.inTrackList === "enable") ? mainTrackList : null, deviceName);
+//					console.log('=> url=', url, 'path=', path, commander.soundsRepository, reg);
+					playSound(soundPlayer, xpl, url, path, body.uuid, (body.inTrackList === "enable") ? mainTrackList : null, deviceName);
 					return;
 
 				case "volume+":
@@ -116,6 +150,71 @@ commander.command('*').description("Start waiting sound commands").action(() => 
 
 var updateLock = Semaphore(1);
 
+const ttsToFile = {};
+
+function playTTS(ttsClient, soundPlayer, xpl, text, languageCode, ssmlGender, uuid, deviceName) {
+	const request = {
+		input: {text},
+		voice: {languageCode, ssmlGender},
+		audioConfig: {audioEncoding: 'MP3'},
+	};
+
+	const shasum = crypto.createHash('sha1');
+	shasum.update(JSON.stringify(request));
+	const key = shasum.digest('hex') + '.mp3';
+
+	debug('playTTS', 'key=', key, 'request=', request);
+
+	let ttsPath;
+	if (commander.ttsCacheDir) {
+		ttsPath = Path.join(commander.ttsCacheDir, key);
+
+		if (fs.existsSync(ttsPath)) {
+			playSound(soundPlayer, xpl, "tts:" + text, ttsPath, uuid, null, deviceName);
+			return;
+		}
+	}
+
+	const alreadyFilePath = ttsToFile[key];
+	if (alreadyFilePath) {
+		playSound(soundPlayer, xpl, "tts:" + text, alreadyFilePath, uuid, null, deviceName);
+		return;
+	}
+
+	ttsClient.synthesizeSpeech(request).then((result) => {
+		debug('playTTS', 'SynthesizeSpeech Result=', result);
+
+		const [response] = result;
+
+		if (ttsPath) {
+			fs.writeFile(ttsPath, response.audioContent, 'binary', (error) => {
+				if (error) {
+					console.error(error);
+					return;
+				}
+				playSound(soundPlayer, xpl, "tts:" + text, ttsPath, uuid, null, deviceName);
+			});
+			return;
+		}
+
+		tmp.file({prefix: 'tts-', postfix: '.mp3'}, (error, path) => {
+			fs.writeFile(path, response.audioContent, 'binary', (error) => {
+				if (error) {
+					console.error(error);
+					return;
+				}
+				ttsToFile[key] = path;
+
+				playSound(soundPlayer, xpl, "tts:" + text, path, uuid, null, deviceName);
+			});
+		});
+
+	}, (error) => {
+		console.error(error);
+	})
+
+}
+
 function changeMute(xpl, mute, deviceName) {
 	debug("Change mute to ", mute);
 
@@ -123,7 +222,7 @@ function changeMute(xpl, mute, deviceName) {
 		loudness.setMuted(mute, function (error) {
 			updateLock.leave();
 			if (error) {
-				console.error(error);
+				console.error("Can not set muted error=", error);
 				return;
 			}
 
@@ -139,7 +238,7 @@ function changeVolume(xpl, increment, deviceName) {
 		loudness.getVolume((error, volume) => {
 			if (error) {
 				updateLock.leave();
-				console.error(error);
+				console.error("Can not get volume error=", error);
 				return;
 			}
 
@@ -147,7 +246,7 @@ function changeVolume(xpl, increment, deviceName) {
 				updateLock.leave();
 
 				if (error) {
-					console.error(error);
+					console.error("Can not set volume error=", error);
 					return;
 				}
 
@@ -168,7 +267,7 @@ function updateLoudnessChanges(xpl, deviceName) {
 			debug("getMuted() returns", mute, error);
 
 			if (error) {
-				console.error(error);
+				console.error("Can not get muted error=", error);
 				updateLock.leave();
 				return;
 			}
@@ -186,7 +285,7 @@ function updateLoudnessChanges(xpl, deviceName) {
 
 			}, "audio.basic", function (error) {
 				if (error) {
-					console.error(error);
+					console.error("Can not send xpl message error=", error);
 				}
 				updateLock.leave();
 			});
@@ -197,7 +296,7 @@ function updateLoudnessChanges(xpl, deviceName) {
 		loudness.getVolume((error, volume) => {
 			debug("getVolume() returns", volume, error);
 			if (error) {
-				console.error(error);
+				console.error("Can not get volume error=", error);
 				return updateMute();
 			}
 
@@ -212,7 +311,7 @@ function updateLoudnessChanges(xpl, deviceName) {
 				command: volume
 			}, "audio.basic", function (error) {
 				if (error) {
-					console.error(error);
+					console.error("Can not send xpl message error=", error);
 				}
 
 				updateMute();
@@ -223,9 +322,11 @@ function updateLoudnessChanges(xpl, deviceName) {
 
 var trackList = [];
 
-function playSound(soundPlayer, xpl, url, uuid, trackList, deviceName) {
+function playSound(soundPlayer, xpl, url, path, uuid, trackList, deviceName) {
 	debug("playSound", "Play sound url=", url);
-	var sound = soundPlayer.newSound(url, uuid);
+	var sound = soundPlayer.newSound(path, uuid);
+	sound._url = url;
+
 	if (trackList) {
 		trackList.push(sound);
 
@@ -244,7 +345,7 @@ function playSound1(soundPlayer, xpl, sound, deviceName, trackList) {
 	function onPlaying() {
 		xpl.sendXplTrig({
 			device: deviceName,
-			url: sound.url,
+			url: sound._url,
 			command: 'playing',
 			uuid: sound.uuid
 		}, "audio.basic");
@@ -253,7 +354,7 @@ function playSound1(soundPlayer, xpl, sound, deviceName, trackList) {
 	function onProgress(progress) {
 		var d = {
 			device: deviceName,
-			url: sound.url,
+			url: sound._url,
 			command: 'progress',
 			uuid: sound.uuid
 		};
@@ -272,7 +373,7 @@ function playSound1(soundPlayer, xpl, sound, deviceName, trackList) {
 		xpl.sendXplTrig({
 			device: deviceName,
 			uuid: sound.uuid,
-			url: sound.url,
+			url: sound._url,
 			command: 'stop'
 		}, "audio.basic");
 
@@ -285,7 +386,8 @@ function playSound1(soundPlayer, xpl, sound, deviceName, trackList) {
 		}
 	}
 
-	function onError() {
+	function onError(error) {
+		console.error(error);
 		sound.removeListener('playing', onPlaying);
 		sound.removeListener('progress', onProgress);
 		sound.removeListener('stopped', onStopped);

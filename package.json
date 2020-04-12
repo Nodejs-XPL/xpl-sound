@@ -3,15 +3,17 @@
   "version": "1.2.2",
   "description": "XPL sound",
   "bin": {
-  	"xpl-sound": "./bin/xpl-sound"
+    "xpl-sound": "./bin/xpl-sound"
   },
   "dependencies": {
-	  "xpl-api": "~2.1",
-	  "commander": "~2.3",
-	  "loudness": "~0.2",
-	  "semaphore": "~1.0",
-	  "soundplayer": "~1.1",
-	  "debug": "~4.1"
+    "@google-cloud/text-to-speech": "^2.3.0",
+    "commander": "~2.3",
+    "debug": "~2.2",
+    "loudness": "~0.2",
+    "semaphore": "~1.0",
+    "soundplayer": "~1.1",
+    "tmp": "^0.1.0",
+	"debug": "~4.1"
   },
   "keywords": [
     "XPL"
@@ -19,8 +21,11 @@
   "files": [
     "xpl-sound.js",
     "bin/xpl-sound"
-	],
-  "repository": { "type": "git", "url": "https://github.com/Nodejs-XPL/xpl-sound.git" },
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Nodejs-XPL/xpl-sound.git"
+  },
   "author": "Olivier Oeuillot",
   "readmeFilename": "README.md",
   "engines": {
